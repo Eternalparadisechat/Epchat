@@ -30,9 +30,14 @@ def get_sender_name(user):
     return name
 
 # === ПЕРЕСЫЛКА СООБЩЕНИЙ МЕЖДУ ЧАТАМИ ===
-@bot.message_handler(func=lambda m: m.chat.id in [CHAT_A, CHAT_B] and not (m.text and m.text.startswith('/')))
+@bot.message_handler(func=lambda m: m.chat.id in [CHAT_A, CHAT_B])
 def relay_messages(message):
+    # Пропускаем сообщения от самого бота
     if message.from_user.id == bot.get_me().id:
+        return
+    
+    # Пропускаем команды (начинаются с /)
+    if message.text and message.text.startswith('/'):
         return
     
     chat_id = message.chat.id
@@ -45,104 +50,139 @@ def relay_messages(message):
         original_sender = get_sender_name(original.from_user)
         reply_info = f"📨 {sender_name} ответил(а) {original_sender}\n\n"
     
+    # Определяем тип контента
+    content_type = message.content_type
+    logger.info(f"📨 Получено сообщение типа: {content_type} из чата {chat_id}")
+    
     # Из чата A в B
     if chat_id == CHAT_A:
         try:
-            if message.text:
+            thread_id = CHAT_B_THREAD if CHAT_B_THREAD else None
+            
+            if content_type == 'text':
                 bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name}\n\n{message.text}", 
-                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.photo:
+                               message_thread_id=thread_id)
+            
+            elif content_type == 'photo':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_photo(CHAT_B, message.photo[-1].file_id, caption=caption,
-                             message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.video:
+                             message_thread_id=thread_id)
+            
+            elif content_type == 'video':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_video(CHAT_B, message.video.file_id, caption=caption,
-                             message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.document:
+                             message_thread_id=thread_id)
+            
+            elif content_type == 'document':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_document(CHAT_B, message.document.file_id, caption=caption,
-                                message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.animation:  # GIF
+                                message_thread_id=thread_id)
+            
+            elif content_type == 'animation':  # GIF
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_animation(CHAT_B, message.animation.file_id, caption=caption,
-                                 message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.sticker:
+                                 message_thread_id=thread_id)
+            
+            elif content_type == 'sticker':
                 bot.send_sticker(CHAT_B, message.sticker.file_id, 
-                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                               message_thread_id=thread_id)
                 bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name} (стикер)",
-                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.voice:
-                # Для голосовых отправляем без caption, потом отдельное сообщение
+                               message_thread_id=thread_id)
+            
+            elif content_type == 'voice':
                 bot.send_voice(CHAT_B, message.voice.file_id,
-                             message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                             message_thread_id=thread_id)
                 bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name} (голосовое)",
-                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.audio:
+                               message_thread_id=thread_id)
+            
+            elif content_type == 'audio':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_audio(CHAT_B, message.audio.file_id, caption=caption,
-                             message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.video_note:  # Кружок
+                             message_thread_id=thread_id)
+            
+            elif content_type == 'video_note':  # Кружок
                 bot.send_video_note(CHAT_B, message.video_note.file_id,
-                                  message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                                  message_thread_id=thread_id)
                 bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name} (видеосообщение)",
-                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            logger.info(f"✅ Переслано из A в B: {message.content_type}")
+                               message_thread_id=thread_id)
+            
+            else:
+                logger.warning(f"⚠️ Неподдерживаемый тип: {content_type}")
+                bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name}\n(неподдерживаемый тип: {content_type})",
+                               message_thread_id=thread_id)
+            
+            logger.info(f"✅ Переслано из A в B: {content_type}")
         except Exception as e:
             logger.error(f"Ошибка A→B: {e}")
     
     # Из чата B в A
     elif chat_id == CHAT_B:
+        # Проверяем топик, если указан
         if CHAT_B_THREAD and message.message_thread_id != CHAT_B_THREAD:
+            logger.info(f"⏭️ Пропущено: не тот топик (нужен {CHAT_B_THREAD}, пришёл {message.message_thread_id})")
             return
+        
         try:
-            if message.text:
+            if content_type == 'text':
                 bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name}\n\n{message.text}")
-            elif message.photo:
+            
+            elif content_type == 'photo':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_photo(CHAT_A, message.photo[-1].file_id, caption=caption)
-            elif message.video:
+            
+            elif content_type == 'video':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_video(CHAT_A, message.video.file_id, caption=caption)
-            elif message.document:
+            
+            elif content_type == 'document':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_document(CHAT_A, message.document.file_id, caption=caption)
-            elif message.animation:  # GIF
+            
+            elif content_type == 'animation':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_animation(CHAT_A, message.animation.file_id, caption=caption)
-            elif message.sticker:
+            
+            elif content_type == 'sticker':
                 bot.send_sticker(CHAT_A, message.sticker.file_id)
                 bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name} (стикер)")
-            elif message.voice:
+            
+            elif content_type == 'voice':
                 bot.send_voice(CHAT_A, message.voice.file_id)
                 bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name} (голосовое)")
-            elif message.audio:
+            
+            elif content_type == 'audio':
                 caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_audio(CHAT_A, message.audio.file_id, caption=caption)
-            elif message.video_note:  # Кружок
+            
+            elif content_type == 'video_note':
                 bot.send_video_note(CHAT_A, message.video_note.file_id)
                 bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name} (видеосообщение)")
-            logger.info(f"✅ Переслано из B в A: {message.content_type}")
+            
+            else:
+                logger.warning(f"⚠️ Неподдерживаемый тип: {content_type}")
+                bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name}\n(неподдерживаемый тип: {content_type})")
+            
+            logger.info(f"✅ Переслано из B в A: {content_type}")
         except Exception as e:
             logger.error(f"Ошибка B→A: {e}")
 
@@ -160,10 +200,14 @@ def channel_reaction(message):
     except Exception as e:
         logger.error(f"Ошибка реакции: {e}")
 
-# === КОМАНДА /start ===
+# === КОМАНДЫ ===
 @bot.message_handler(commands=['start'])
 def start_command(message):
-    bot.reply_to(message, "✅ Бот запущен! Пересылаются:\n• Текст\n• Фото\n• Видео\n• GIF\n• Файлы\n• Стикеры\n• Голосовые\n• Аудио\n• Видеосообщения")
+    bot.reply_to(message, "✅ Бот запущен! Пересылаются все типы сообщений:\n• Текст\n• Фото\n• Видео\n• GIF\n• Файлы\n• Стикеры\n• Голосовые\n• Аудио\n• Видеосообщения")
+
+@bot.message_handler(commands=['id'])
+def get_id(message):
+    bot.reply_to(message, f"Chat ID: {message.chat.id}\nThread ID: {message.message_thread_id}")
 
 # === ПРОСТОЙ ПИНГ ДЛЯ ПРЕДОТВРАЩЕНИЯ ЗАСЫПАНИЯ ===
 def keep_alive():
