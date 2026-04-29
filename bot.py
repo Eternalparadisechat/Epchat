@@ -23,7 +23,7 @@ def get_sender_name(user):
     if not user:
         return "Неизвестный"
     
-    # Для анонимных админов (у них first_name = "Group")
+    # Для анонимных админов
     if user.first_name == "Group" and user.last_name is None:
         return "Анонимный администратор"
     
@@ -33,16 +33,6 @@ def get_sender_name(user):
     if user.username:
         return f"{name} (@{user.username})"
     return name
-
-def is_reply_to_message(message):
-    """Проверяет, является ли сообщение ответом на другое сообщение"""
-    if not message.reply_to_message:
-        return False
-    
-    # Проверяем, что reply_to_message действительно существует и это не тот же отправитель
-    if message.reply_to_message.message_id:
-        return True
-    return False
 
 def get_reply_info(message):
     """Получает информацию об ответе, если он есть"""
@@ -68,7 +58,6 @@ def handle_text(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    # Получаем информацию об ответе
     reply_info = get_reply_info(message)
     
     if chat_id == CHAT_A:
@@ -95,7 +84,6 @@ def handle_photo(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    # Получаем информацию об ответе
     reply_info = get_reply_info(message)
     
     caption = f"{reply_info}📩 {sender_name}"
@@ -174,7 +162,7 @@ def handle_animation(message):
         bot.send_animation(CHAT_A, message.animation.file_id, caption=caption)
         logger.info(f"✅ GIF B→A")
 
-# === ДОКУМЕНТЫ (включая GIF как документ) ===
+# === ДОКУМЕНТЫ ===
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     if message.from_user.id == bot.get_me().id:
@@ -186,7 +174,6 @@ def handle_document(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    # Проверяем, не GIF ли это
     is_gif = message.document.mime_type == "image/gif"
     
     reply_info = get_reply_info(message)
@@ -335,7 +322,7 @@ def handle_video_note(message):
         bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name} (видеосообщение)")
         logger.info(f"✅ Видеосообщение B→A")
 
-# === РЕАКЦИИ НА ПОСТЫ В КАНАЛАХ ===
+# === РЕАКЦИИ НА ПОСТЫ В КАНАЛАХ (РАБОЧАЯ ВЕРСИЯ) ===
 @bot.channel_post_handler(func=lambda m: True)
 def channel_reaction(message):
     allowed = [-1001317416582, -1002185590715]
