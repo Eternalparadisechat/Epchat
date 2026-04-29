@@ -18,6 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 bot = TeleBot(BOT_TOKEN)
+API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 def get_sender_name(user):
     if not user:
@@ -322,19 +323,8 @@ def handle_video_note(message):
         bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name} (видеосообщение)")
         logger.info(f"✅ Видеосообщение B→A")
 
-# === РЕАКЦИИ НА ПОСТЫ В КАНАЛАХ (РАБОЧАЯ ВЕРСИЯ) ===
-@bot.channel_post_handler(func=lambda m: True)
-def channel_reaction(message):
-    allowed = [-1001317416582, -1002185590715]
-    if message.chat.id not in allowed:
-        return
-    try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setMessageReaction"
-        data = {"chat_id": message.chat.id, "message_id": message.message_id, "reaction": [{"type": "emoji", "emoji": "🔥"}]}
-        requests.post(url, json=data, timeout=5)
-        logger.info(f"🔥 Реакция на пост {message.message_id}")
-    except Exception as e:
-        logger.error(f"Ошибка реакции: {e}")
+# === РЕАКЦИИ НА ПОСТЫ В КАНАЛАХ (РАБОЧАЯ ВЕРСИЯ ИЗ ПРИМЕРА) ===
+REACTION_CHANNELS = [-1002185590715, -1001317416582]
 
 # === КОМАНДЫ ===
 @bot.message_handler(commands=['start'])
@@ -351,7 +341,7 @@ def keep_alive():
         time.sleep(600)
         try:
             if RENDER_URL:
-                requests.get(f"{RENDER_URL}")
+                requests.get(f"{RENDER_URL}", timeout=10)
                 logger.info("🏓 Пинг")
         except:
             pass
@@ -359,12 +349,26 @@ def keep_alive():
 if RENDER_URL:
     threading.Thread(target=keep_alive, daemon=True).start()
 
-# === ЗАПУСК ===
+# === ЗАПУСК С РАБОЧИМИ РЕАКЦИЯМИ ===
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
     try:
         update = request.get_json()
-        bot.process_new_updates([types.Update.de_json(update)])
+        
+        # Реакции на каналы (как в рабочем примере)
+        if update and "channel_post" in update:
+            post = update["channel_post"]
+            channel_id = post["chat"]["id"]
+            if channel_id in REACTION_CHANNELS:
+                message_id = post["message_id"]
+                url = f"{API_URL}/setMessageReaction"
+                data = {"chat_id": channel_id, "message_id": message_id, "reaction": [{"type": "emoji", "emoji": "🔥"}]}
+                requests.post(url, json=data, timeout=5)
+                logger.info(f"🔥 Реакция на пост {message_id} в канале {channel_id}")
+        
+        # Обработка остальных обновлений
+        update_obj = types.Update.de_json(update)
+        bot.process_new_updates([update_obj])
         return "OK", 200
     except Exception as e:
         logger.error(f"Webhook error: {e}")
@@ -377,6 +381,7 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     
+    # Удаляем старый вебхук и устанавливаем новый
     bot.remove_webhook()
     if RENDER_URL:
         webhook_url = f"{RENDER_URL}/{BOT_TOKEN}"
@@ -385,5 +390,6 @@ if __name__ == "__main__":
     
     logger.info("🤖 БОТ ЗАПУЩЕН")
     logger.info(f"Чат A: {CHAT_A}, Чат B: {CHAT_B}, Топик: {CHAT_B_THREAD if CHAT_B_THREAD else 'нет'}")
+    logger.info(f"🔥 Реакции на каналы: {REACTION_CHANNELS}")
     
     app.run(host="0.0.0.0", port=port)
