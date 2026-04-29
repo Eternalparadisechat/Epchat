@@ -43,49 +43,61 @@ def relay_messages(message):
     if message.reply_to_message:
         original = message.reply_to_message
         original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 *{sender_name}* ответил(а) *{original_sender}*\n\n"
+        reply_info = f"📨 {sender_name} ответил(а) {original_sender}\n\n"
     
     # Из чата A в B
     if chat_id == CHAT_A:
         try:
             if message.text:
-                bot.send_message(CHAT_B, f"{reply_info}📩 *{sender_name}*\n\n{message.text}", 
-                               parse_mode="Markdown", message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name}\n\n{message.text}", 
+                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
             elif message.photo:
-                caption = f"{reply_info}📩 *{sender_name}*"
+                caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_photo(CHAT_B, message.photo[-1].file_id, caption=caption,
-                             parse_mode="Markdown", message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                             message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
             elif message.video:
-                caption = f"{reply_info}📩 *{sender_name}*"
+                caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_video(CHAT_B, message.video.file_id, caption=caption,
-                             parse_mode="Markdown", message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                             message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
             elif message.document:
-                caption = f"{reply_info}📩 *{sender_name}*"
+                caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_document(CHAT_B, message.document.file_id, caption=caption,
-                                parse_mode="Markdown", message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            elif message.animation:
-                caption = f"{reply_info}📩 *{sender_name}*"
+                                message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+            elif message.animation:  # GIF
+                caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
                 bot.send_animation(CHAT_B, message.animation.file_id, caption=caption,
-                                 parse_mode="Markdown", message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                                 message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
             elif message.sticker:
-                bot.send_sticker(CHAT_B, message.sticker.file_id, message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-                bot.send_message(CHAT_B, f"{reply_info}📩 *{sender_name}* (стикер)",
-                               parse_mode="Markdown", message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                bot.send_sticker(CHAT_B, message.sticker.file_id, 
+                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name} (стикер)",
+                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
             elif message.voice:
-                bot.send_voice(CHAT_B, message.voice.file_id, caption=f"{reply_info}📩 *{sender_name}*",
-                             parse_mode="Markdown", message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                # Для голосовых отправляем без caption, потом отдельное сообщение
+                bot.send_voice(CHAT_B, message.voice.file_id,
+                             message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name} (голосовое)",
+                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
             elif message.audio:
-                bot.send_audio(CHAT_B, message.audio.file_id, caption=f"{reply_info}📩 *{sender_name}*",
-                             parse_mode="Markdown", message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
-            logger.info(f"✅ Переслано из A в B")
+                caption = f"{reply_info}📩 {sender_name}"
+                if message.caption:
+                    caption += f"\n\n{message.caption}"
+                bot.send_audio(CHAT_B, message.audio.file_id, caption=caption,
+                             message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+            elif message.video_note:  # Кружок
+                bot.send_video_note(CHAT_B, message.video_note.file_id,
+                                  message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+                bot.send_message(CHAT_B, f"{reply_info}📩 {sender_name} (видеосообщение)",
+                               message_thread_id=CHAT_B_THREAD if CHAT_B_THREAD else None)
+            logger.info(f"✅ Переслано из A в B: {message.content_type}")
         except Exception as e:
             logger.error(f"Ошибка A→B: {e}")
     
@@ -95,43 +107,42 @@ def relay_messages(message):
             return
         try:
             if message.text:
-                bot.send_message(CHAT_A, f"{reply_info}📩 *{sender_name}*\n\n{message.text}", 
-                               parse_mode="Markdown")
+                bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name}\n\n{message.text}")
             elif message.photo:
-                caption = f"{reply_info}📩 *{sender_name}*"
+                caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
-                bot.send_photo(CHAT_A, message.photo[-1].file_id, caption=caption,
-                             parse_mode="Markdown")
+                bot.send_photo(CHAT_A, message.photo[-1].file_id, caption=caption)
             elif message.video:
-                caption = f"{reply_info}📩 *{sender_name}*"
+                caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
-                bot.send_video(CHAT_A, message.video.file_id, caption=caption,
-                             parse_mode="Markdown")
+                bot.send_video(CHAT_A, message.video.file_id, caption=caption)
             elif message.document:
-                caption = f"{reply_info}📩 *{sender_name}*"
+                caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
-                bot.send_document(CHAT_A, message.document.file_id, caption=caption,
-                                parse_mode="Markdown")
-            elif message.animation:
-                caption = f"{reply_info}📩 *{sender_name}*"
+                bot.send_document(CHAT_A, message.document.file_id, caption=caption)
+            elif message.animation:  # GIF
+                caption = f"{reply_info}📩 {sender_name}"
                 if message.caption:
                     caption += f"\n\n{message.caption}"
-                bot.send_animation(CHAT_A, message.animation.file_id, caption=caption,
-                                 parse_mode="Markdown")
+                bot.send_animation(CHAT_A, message.animation.file_id, caption=caption)
             elif message.sticker:
                 bot.send_sticker(CHAT_A, message.sticker.file_id)
-                bot.send_message(CHAT_A, f"{reply_info}📩 *{sender_name}* (стикер)",
-                               parse_mode="Markdown")
+                bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name} (стикер)")
             elif message.voice:
-                bot.send_voice(CHAT_A, message.voice.file_id, caption=f"{reply_info}📩 *{sender_name}*",
-                             parse_mode="Markdown")
+                bot.send_voice(CHAT_A, message.voice.file_id)
+                bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name} (голосовое)")
             elif message.audio:
-                bot.send_audio(CHAT_A, message.audio.file_id, caption=f"{reply_info}📩 *{sender_name}*",
-                             parse_mode="Markdown")
-            logger.info(f"✅ Переслано из B в A")
+                caption = f"{reply_info}📩 {sender_name}"
+                if message.caption:
+                    caption += f"\n\n{message.caption}"
+                bot.send_audio(CHAT_A, message.audio.file_id, caption=caption)
+            elif message.video_note:  # Кружок
+                bot.send_video_note(CHAT_A, message.video_note.file_id)
+                bot.send_message(CHAT_A, f"{reply_info}📩 {sender_name} (видеосообщение)")
+            logger.info(f"✅ Переслано из B в A: {message.content_type}")
         except Exception as e:
             logger.error(f"Ошибка B→A: {e}")
 
@@ -147,12 +158,12 @@ def channel_reaction(message):
         requests.post(url, json=data, timeout=5)
         logger.info(f"🔥 Реакция на пост {message.message_id}")
     except Exception as e:
-        logger.error(f"Ошибка: {e}")
+        logger.error(f"Ошибка реакции: {e}")
 
 # === КОМАНДА /start ===
 @bot.message_handler(commands=['start'])
 def start_command(message):
-    bot.reply_to(message, "✅ Бот запущен! Сообщения пересылаются между чатами.")
+    bot.reply_to(message, "✅ Бот запущен! Пересылаются:\n• Текст\n• Фото\n• Видео\n• GIF\n• Файлы\n• Стикеры\n• Голосовые\n• Аудио\n• Видеосообщения")
 
 # === ПРОСТОЙ ПИНГ ДЛЯ ПРЕДОТВРАЩЕНИЯ ЗАСЫПАНИЯ ===
 def keep_alive():
