@@ -23,7 +23,7 @@ def get_sender_name(user):
     if not user:
         return "Неизвестный"
     
-    # Для анонимных админов
+    # Для анонимных админов (у них first_name = "Group")
     if user.first_name == "Group" and user.last_name is None:
         return "Анонимный администратор"
     
@@ -34,6 +34,31 @@ def get_sender_name(user):
         return f"{name} (@{user.username})"
     return name
 
+def is_reply_to_message(message):
+    """Проверяет, является ли сообщение ответом на другое сообщение"""
+    if not message.reply_to_message:
+        return False
+    
+    # Проверяем, что reply_to_message действительно существует и это не тот же отправитель
+    if message.reply_to_message.message_id:
+        return True
+    return False
+
+def get_reply_info(message):
+    """Получает информацию об ответе, если он есть"""
+    if not message.reply_to_message:
+        return ""
+    
+    original = message.reply_to_message
+    original_sender = get_sender_name(original.from_user)
+    current_sender = get_sender_name(message.from_user)
+    
+    # Проверяем, не ответил ли пользователь сам себе
+    if message.from_user.id == original.from_user.id:
+        return ""
+    
+    return f"📨 {current_sender} ответил {original_sender}\n\n"
+
 # === ТЕКСТОВЫЕ СООБЩЕНИЯ ===
 @bot.message_handler(func=lambda m: m.chat.id in [CHAT_A, CHAT_B] and m.text and not m.text.startswith('/'))
 def handle_text(message):
@@ -43,11 +68,8 @@ def handle_text(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    # Получаем информацию об ответе
+    reply_info = get_reply_info(message)
     
     if chat_id == CHAT_A:
         thread_id = CHAT_B_THREAD if CHAT_B_THREAD else None
@@ -73,11 +95,8 @@ def handle_photo(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    # Получаем информацию об ответе
+    reply_info = get_reply_info(message)
     
     caption = f"{reply_info}📩 {sender_name}"
     if message.caption:
@@ -107,11 +126,7 @@ def handle_video(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    reply_info = get_reply_info(message)
     
     caption = f"{reply_info}📩 {sender_name}"
     if message.caption:
@@ -141,11 +156,7 @@ def handle_animation(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    reply_info = get_reply_info(message)
     
     caption = f"{reply_info}📩 {sender_name}"
     if message.caption:
@@ -155,15 +166,15 @@ def handle_animation(message):
         thread_id = CHAT_B_THREAD if CHAT_B_THREAD else None
         bot.send_animation(CHAT_B, message.animation.file_id, caption=caption,
                           message_thread_id=thread_id)
-        logger.info(f"✅ GIF (анимация) A→B")
+        logger.info(f"✅ GIF A→B")
         
     elif chat_id == CHAT_B:
         if CHAT_B_THREAD and message.message_thread_id != CHAT_B_THREAD:
             return
         bot.send_animation(CHAT_A, message.animation.file_id, caption=caption)
-        logger.info(f"✅ GIF (анимация) B→A")
+        logger.info(f"✅ GIF B→A")
 
-# === GIF КАК ДОКУМЕНТ (для некоторых случаев) ===
+# === ДОКУМЕНТЫ (включая GIF как документ) ===
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     if message.from_user.id == bot.get_me().id:
@@ -175,16 +186,10 @@ def handle_document(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    # Проверяем, не GIF ли это в документе
-    is_gif = False
-    if message.document.mime_type == "image/gif":
-        is_gif = True
+    # Проверяем, не GIF ли это
+    is_gif = message.document.mime_type == "image/gif"
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    reply_info = get_reply_info(message)
     
     caption = f"{reply_info}📩 {sender_name}"
     if message.caption:
@@ -194,12 +199,10 @@ def handle_document(message):
         thread_id = CHAT_B_THREAD if CHAT_B_THREAD else None
         
         if is_gif:
-            # Если это GIF, отправляем как анимацию
             bot.send_animation(CHAT_B, message.document.file_id, caption=caption,
                               message_thread_id=thread_id)
             logger.info(f"✅ GIF (документ) A→B")
         else:
-            # Обычный документ
             bot.send_document(CHAT_B, message.document.file_id, caption=caption,
                              message_thread_id=thread_id)
             logger.info(f"✅ Документ A→B")
@@ -227,11 +230,7 @@ def handle_voice(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    reply_info = get_reply_info(message)
     
     if chat_id == CHAT_A:
         thread_id = CHAT_B_THREAD if CHAT_B_THREAD else None
@@ -260,11 +259,7 @@ def handle_sticker(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    reply_info = get_reply_info(message)
     
     if chat_id == CHAT_A:
         thread_id = CHAT_B_THREAD if CHAT_B_THREAD else None
@@ -293,11 +288,7 @@ def handle_audio(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    reply_info = get_reply_info(message)
     
     caption = f"{reply_info}📩 {sender_name}"
     if message.caption:
@@ -315,7 +306,7 @@ def handle_audio(message):
         bot.send_audio(CHAT_A, message.audio.file_id, caption=caption)
         logger.info(f"✅ Аудио B→A")
 
-# === ВИДЕОСООБЩЕНИЯ (КРУЖКИ) ===
+# === ВИДЕОСООБЩЕНИЯ ===
 @bot.message_handler(content_types=['video_note'])
 def handle_video_note(message):
     if message.from_user.id == bot.get_me().id:
@@ -327,11 +318,7 @@ def handle_video_note(message):
     chat_id = message.chat.id
     sender_name = get_sender_name(message.from_user)
     
-    reply_info = ""
-    if message.reply_to_message:
-        original = message.reply_to_message
-        original_sender = get_sender_name(original.from_user)
-        reply_info = f"📨 {sender_name} ответил {original_sender}\n\n"
+    reply_info = get_reply_info(message)
     
     if chat_id == CHAT_A:
         thread_id = CHAT_B_THREAD if CHAT_B_THREAD else None
@@ -371,7 +358,7 @@ def start_command(message):
 def get_id(message):
     bot.reply_to(message, f"Chat ID: {message.chat.id}\nThread ID: {message.message_thread_id}")
 
-# === ПИНГ ДЛЯ ПРЕДОТВРАЩЕНИЯ ЗАСЫПАНИЯ ===
+# === ПИНГ ===
 def keep_alive():
     while True:
         time.sleep(600)
